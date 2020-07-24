@@ -11,8 +11,6 @@ Socket::Socket(string url_)
 	else
 		cout << "WSAStartup successful!" << endl << endl;
 }
-
-
 Socket::~Socket()
 {
 	shutdown(client, 0);
@@ -47,7 +45,6 @@ void Socket::set_server_details()
 		cout << "name resolved successfully!   " << result->ai_canonname << endl << endl;
 	}
 }
-
 void Socket::create_socket()
 {
 	client = socket(result->ai_family, result->ai_socktype, result->ai_protocol);
@@ -56,7 +53,6 @@ void Socket::create_socket()
 	else
 		cout << "socket created successully!" << endl << endl;
 }
-
 void Socket::connect_to_server()
 {
 	rc = connect(client, result->ai_addr, result->ai_addrlen);
@@ -70,75 +66,49 @@ void Socket::connect_to_server()
 		cout << "successfully connected!" << endl << endl;
 	}
 }
-
-void Socket::send_token(char buff, int size)
+void Socket::send_data(char* buff, int size)
 {
-	if (rc=send(client, &buff, size, 0) == SOCKET_ERROR)
+	rc = 0;
+	int len = 0;
+
+	do
 	{
-		cout << "Failed to send token! Error: " << WSAGetLastError() << endl << endl;
+		size -= rc;
+		rc = send(client, buff, size, 0);
+
+		if (rc <= 0)
+		{
+			cout << "error sending data: " << WSAGetLastError() << endl << endl;
+			return;
+		}
+
+		len += rc;
+	} while ( rc < size);
+
+	cout << "bytes sent: " << len << endl << endl;
+}
+int Socket::receive_data(char* buff,SECURITY_STATUS secStatus)
+{
+	int len = 0;
+
+	if (secStatus != SEC_E_OK)
+		len = recv(client, buff, 5000, 0);
+	else
+	{
+		// TO DO: setup receiving of application data
+	}
+
+	if (len == SOCKET_ERROR || len == 0)
+	{
+		cout << "error receiving data: " << WSAGetLastError() << endl << endl;
+		return 0;
 	}
 	else
 	{
-		cout << "Token sent successfully!" << endl << "Bytes sent: " << rc << endl << endl;
+		cout << "bytes received: " << len << endl << endl;
+		return len;
 	}
 }
-
-void Socket::receive_token(char* buf)
-{
-	string tkn{ "" };
-	rc = 1;
-	while (rc > 0)
-	{
-		rc = recv(client, buf, sizeof(buf), 0);
-		if (rc != SOCKET_ERROR && rc != 0)
-		{
-			cout << "Token data received..." << endl << endl;
-			tkn += buf;
-		}
-		else
-			cout << "Error receiving data: " << WSAGetLastError() << endl << endl;
-	}
-
-	for (int i = 0; i < 12000; i++)
-	{
-		if (i < tkn.length())
-		{
-			buf[i] = tkn[i];
-		}
-		else
-		{
-			buf[i] = NULL;
-		}
-	}
-	/*int buflen = 0;
-	string tkn{ "" };
-	while(buflen == 0||rc>0)
-	{
-		rc=recv(client, buf, 10, 0);
-		if (rc != SOCKET_ERROR && rc != 0)
-		{
-			cout << "Token received successfully!" << endl << endl;
-			tkn += buf;
-			buflen += sizeof(buf);
-		}
-		if (rc == 0)
-			cout << "Server dropped connection!" << endl;
-	}
-	for (int i = 0; i < 12000; i++)
-	{
-		if (i < tkn.length())
-		{
-			buf[i] = tkn[i];
-		}
-		else
-		{
-			buf[i] = NULL;
-		}
-	}
-	cout << WSAGetLastError() << endl << tkn << endl;*/
-	
-}
-
 SOCKET Socket::get_socket()
 {
 	return client;

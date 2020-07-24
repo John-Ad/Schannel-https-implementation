@@ -1,6 +1,7 @@
 #include "TLS.h"
 
-TLS::TLS()
+TLS::TLS(char* url_)
+	:url{ url_ }
 {
 	/*dllModule = LoadLibrary("Secur32.dll");
 	if(dllModule!=NULL)
@@ -33,13 +34,12 @@ void TLS::get_schannel_creds()
 		{SEC_E_SECPKG_NOT_FOUND,"SEC_E_SECPKG_NOT_FOUND"},
 		{SEC_E_UNKNOWN_CREDENTIALS,"SEC_E_UNKNOWN_CREDENTIALS"}
 	};
-	SECURITY_STATUS secStatus;
 	TimeStamp lifeTime;
 	SCHANNEL_CRED credData;
 
 	ZeroMemory(&credData, sizeof(credData));					//clear SCHANNEL_CRED memory or error: SEC_E_INSUFFICIENT_MEMORY occurs
 	credData.dwVersion = SCHANNEL_CRED_VERSION;
-	credData.grbitEnabledProtocols = SP_PROT_TLS1;
+	credData.grbitEnabledProtocols = SP_PROT_TLS1_2_CLIENT;
 
 	secStatus = AcquireCredentialsHandle(		//gets the credentials necessary to make use of the ssp
 			NULL,						//default principle
@@ -93,7 +93,6 @@ void TLS::handshake_loop()
 		{SEC_E_WRONG_PRINCIPAL,"SEC_E_WRONG_PRINCIPAL"}
 	};
 
-	SECURITY_STATUS secStatus;
 	TimeStamp lifeTime;
 	CtxtHandle phContext;
 	SecBufferDesc outBuffDesc;
@@ -116,7 +115,7 @@ void TLS::handshake_loop()
 	secStatus = InitializeSecurityContext(
 		&cred,							//credentials acquired by acquireCredentialsHandle
 		NULL,							//in the first call this is NULL, afterwards use hcText parameter variable
-		(SEC_CHAR*)"www.google.com",							//targetname is left as the default
+		(SEC_CHAR*)url,							//targetname is left as the default
 		flags,							//bit flags that state how the security context will function
 		0,								//this argument is reserved and left as 0
 		SECURITY_NATIVE_DREP,			//how the data is represented. In schannel this argument is not used and set to 0
@@ -145,179 +144,82 @@ void TLS::handshake_loop()
 			i = 10;
 		}
 	}
-
 	cout << "size of token: " << outBuff[0].cbBuffer << endl << endl;
-	//end of creation of token
 
-	char* token = static_cast<char*>(outBuff[0].pvBuffer);
-	rc = send(client.get_socket(), token, outBuff[0].cbBuffer, 0);
-	if (rc == SOCKET_ERROR)
-		cout << "error sending token: " << WSAGetLastError() << endl << endl;
-	else
-		cout << "bytes sent: " << rc << endl << endl;
+	char* token;
+	char buff[10000];
 
-	FreeContextBuffer(outBuff[0].pvBuffer);
-
-	char buff[2939];
-	rc = recv(client.get_socket(), buff, 2939, 0);
-	if (rc == SOCKET_ERROR)
-		cout << "error receiving token: " << WSAGetLastError() << endl << endl;
-	else
-		cout << "bytes received: " << rc << endl << endl;
-
-	
-	//start of handshake loop
-	inBuffDesc.cBuffers = 2;
-	inBuffDesc.pBuffers = inBuff;
-	inBuffDesc.ulVersion = SECBUFFER_VERSION;
-
-	inBuff[0].cbBuffer = rc;
-	inBuff[0].pvBuffer = buff;
-	inBuff[0].BufferType = SECBUFFER_TOKEN;
-
-	inBuff[1].cbBuffer = 0;
-	inBuff[1].pvBuffer = NULL;
-	inBuff[1].BufferType = SECBUFFER_EMPTY;
-
-	outBuffDesc.cBuffers = 1;
-	outBuffDesc.pBuffers = outBuff;
-	outBuffDesc.ulVersion = SECBUFFER_VERSION;
-
-	outBuff[0].cbBuffer = 0;
-	outBuff[0].pvBuffer = NULL;
-	outBuff[0].BufferType = SECBUFFER_VERSION;
-
-	secStatus = InitializeSecurityContext(
-		&cred,
-		&phContext,
-		(SEC_CHAR*)"www.google.com",
-		flags,
-		0,
-		SECURITY_NATIVE_DREP,
-		&inBuffDesc,
-		0,
-		NULL,
-		&outBuffDesc,
-		&ContextAttributes,
-		&lifeTime
-	);
-
-	for (int i = 0; i < 10; i++)
+	while (secStatus == SEC_I_CONTINUE_NEEDED)
 	{
-		if (i < 6)
+		token = static_cast<char*>(outBuff[0].pvBuffer);
+		client.send_data(token, outBuff[0].cbBuffer);
+		FreeContextBuffer(outBuff[0].pvBuffer);
+		rc = client.receive_data(buff,secStatus);
+
+		inBuffDesc.cBuffers = 2;
+		inBuffDesc.pBuffers = inBuff;
+		inBuffDesc.ulVersion = SECBUFFER_VERSION;
+
+		inBuff[0].cbBuffer = rc;
+		inBuff[0].pvBuffer = buff;
+		inBuff[0].BufferType = SECBUFFER_TOKEN;
+
+		inBuff[1].cbBuffer = 0;
+		inBuff[1].pvBuffer = NULL;
+		inBuff[1].BufferType = SECBUFFER_EMPTY;
+
+		outBuffDesc.cBuffers = 1;
+		outBuffDesc.pBuffers = outBuff;
+		outBuffDesc.ulVersion = SECBUFFER_VERSION;
+
+		outBuff[0].cbBuffer = 0;
+		outBuff[0].pvBuffer = NULL;
+		outBuff[0].BufferType = SECBUFFER_VERSION;
+
+		secStatus = InitializeSecurityContext(
+			&cred,
+			&phContext,
+			(SEC_CHAR*)url,
+			flags,
+			0,
+			SECURITY_NATIVE_DREP,
+			&inBuffDesc,
+			0,
+			NULL,
+			&outBuffDesc,
+			&ContextAttributes,
+			&lifeTime
+		);
+
+		for (int i = 0; i < 10; i++)
 		{
-			if (secStatus == success[i].first)
+			if (i < 6)
 			{
-				cout << "InitializeSecurityContext succeeded with code: " << success[i].second << endl << endl;
+				if (secStatus == success[i].first)
+				{
+					cout << "InitializeSecurityContext succeeded with code: " << success[i].second << endl << endl;
+					i = 10;
+				}
+			}
+			if (secStatus == error[i].first)
+			{
+				cout << "InitializeSecurityContext failed with error: " << error[i].second << endl << endl;
 				i = 10;
 			}
 		}
-		if (secStatus == error[i].first)
-		{
-			cout << "InitializeSecurityContext failed with error: " << error[i].second << endl << endl;
-			i = 10;
-		}
+		cout << "size of token: " << outBuff[0].cbBuffer << endl << endl;
+
+		if (inBuff[1].BufferType == SECBUFFER_EXTRA)
+			cout << "extra data in inbuff" << endl << endl;
 	}
-	if (inBuff[1].BufferType == SECBUFFER_EXTRA)
-		cout << "extra data in inbuff" << endl << endl;
 
-	cout << "second token size: " << outBuff[0].cbBuffer << endl << endl;
-
-	token = static_cast<char*>(outBuff[0].pvBuffer);
-	rc = send(client.get_socket(), token, outBuff[0].cbBuffer, 0);
-	if (rc == SOCKET_ERROR)
-		cout << "error sending token: " << WSAGetLastError() << endl << endl;
-	else
-		cout << "bytes sent: " << rc << endl << endl;
-
-	rc = recv(client.get_socket(), buff, 2929, 0);
-	if (rc == SOCKET_ERROR)
-		cout << "error receiving token: " << WSAGetLastError() << endl << endl;
-	else
-		cout << "bytes received: " << rc << endl << endl;
-	
-//0000000000000000000000000000000000000000000000000000000000000000000000000
-	FreeContextBuffer(outBuff[0].pvBuffer);
-	inBuffDesc.cBuffers = 2;
-	inBuffDesc.pBuffers = inBuff;
-	inBuffDesc.ulVersion = SECBUFFER_VERSION;
-
-	inBuff[0].cbBuffer = rc;
-	inBuff[0].pvBuffer = buff;
-	inBuff[0].BufferType = SECBUFFER_TOKEN;
-
-	inBuff[1].cbBuffer = 0;
-	inBuff[1].pvBuffer = NULL;
-	inBuff[1].BufferType = SECBUFFER_EMPTY;
-
-	outBuffDesc.cBuffers = 1;
-	outBuffDesc.pBuffers = outBuff;
-	outBuffDesc.ulVersion = SECBUFFER_VERSION;
-
-	outBuff[0].cbBuffer = 0;
-	outBuff[0].pvBuffer = NULL;
-	outBuff[0].BufferType = SECBUFFER_VERSION;
-
-	secStatus = InitializeSecurityContext(
-		&cred,
-		&phContext,
-		NULL,
-		flags,
-		0,
-		SECURITY_NATIVE_DREP,
-		&inBuffDesc,
-		0,
-		NULL,
-		&outBuffDesc,
-		&ContextAttributes,
-		&lifeTime
-	);
-
-	for (int i = 0; i < 10; i++)
-	{
-		if (i < 6)
-		{
-			if (secStatus == success[i].first)
-			{
-				cout << "InitializeSecurityContext succeeded with code: " << success[i].second << endl << endl;
-				i = 10;
-			}
-		}
-		if (secStatus == error[i].first)
-		{
-			cout << "InitializeSecurityContext failed with error: " << error[i].second << endl << endl;
-			i = 10;
-		}
-	}
-	cout << outBuff[0].cbBuffer << endl << endl;
-	if (inBuff[1].BufferType == SECBUFFER_EXTRA)
-		cout << "extra data in inbuff" << endl << endl;
-
-	//11111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111
-	/*token = static_cast<char*>(outBuff[0].pvBuffer);
-	rc = send(client.get_socket(), token, outBuff[0].cbBuffer, 0);
-	if (rc == SOCKET_ERROR)
-		cout << "error sending token: " << WSAGetLastError() << endl << endl;
-	else
-		cout << "bytes sent: " << rc << endl << endl;
-
-	rc = recv(client.get_socket(), buff, 2929, 0);
-	if (rc == SOCKET_ERROR)
-		cout << "error receiving token: " << WSAGetLastError() << endl << endl;
-	else
-		cout << "bytes received: " << rc << endl << endl;*/
+	if (secStatus == SEC_E_OK)
+		cout << "Secure connection successfully established!" << endl << endl;
 }
-//---------------------------------------------------------------------------------------------------------------
-
-
-
-
-
-
 
 
 //			TODO:
-//					- move the send and receive function to the socket class
+//					- add handling of extra data in inbuff
 
 
 

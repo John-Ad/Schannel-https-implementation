@@ -23,8 +23,10 @@ class TLS
 {
 private:
 	int rc = 0;
+	SECURITY_STATUS secStatus;
 
-	Socket client{ "www.google.com" };
+	char* url;
+	Socket client{ url };
 
 	HMODULE dllModule{ NULL };
 	CredHandle cred;
@@ -34,7 +36,7 @@ private:
 	void handshake_loop();
 
 public:
-	TLS();
+	TLS(char* url_);
 	~TLS();
 };
 

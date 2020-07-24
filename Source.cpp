@@ -2,5 +2,6 @@
 
 int main()
 {
-	TLS client;
+	TLS client((char*)"www.wikipedia.org");
+	return 0;
 }

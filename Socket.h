@@ -25,7 +25,7 @@ public:
 	void set_server_details();
 	void create_socket();
 	void connect_to_server();
-	void send_token(char buff, int size);
-	void receive_token(char* buff);
+	void send_data(char* buff, int size);
+	int receive_data(char* buff,SECURITY_STATUS secStatus);
 	SOCKET get_socket();
 };
