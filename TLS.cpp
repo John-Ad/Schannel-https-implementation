@@ -3,26 +3,26 @@
 TLS::TLS(char* url_)
 	:url{ url_ }
 {
-	/*dllModule = LoadLibrary("Secur32.dll");
-	if(dllModule!=NULL)
-		cout << "library loaded successfully!" << endl << endl;*/
-
+	get_req = "GET / HTTP/1.1\r\nHost: ";
+	get_req += url;
+	get_req += "\r\nConnection: close\r\n\r\n";
 	connect_to_server();
 	get_schannel_creds();
 	handshake_loop();
+	encrypt_send();
+	recv_decrypt();
 }
-
-
 TLS::~TLS()
 {
 }
 
-//______INIT_functions___________________________________________
+//___________________________________________________________________
 void TLS::connect_to_server()
 {
 	client.set_server_details();
 	client.create_socket();
 	client.connect_to_server();
+	cout << "/*********************************************************************************" << endl << endl;
 }
 void TLS::get_schannel_creds()
 {
@@ -69,6 +69,7 @@ void TLS::get_schannel_creds()
 	{
 		cout << "Credentials acquired successfully!" << endl << endl;
 	}
+	cout << "/*********************************************************************************" << endl << endl;
 }
 void TLS::handshake_loop()
 {
@@ -94,7 +95,6 @@ void TLS::handshake_loop()
 	};
 
 	TimeStamp lifeTime;
-	CtxtHandle phContext;
 	SecBufferDesc outBuffDesc;
 	SecBuffer outBuff[1];
 	SecBufferDesc inBuffDesc;
@@ -115,7 +115,7 @@ void TLS::handshake_loop()
 	secStatus = InitializeSecurityContext(
 		&cred,							//credentials acquired by acquireCredentialsHandle
 		NULL,							//in the first call this is NULL, afterwards use hcText parameter variable
-		(SEC_CHAR*)url,							//targetname is left as the default
+		(SEC_CHAR*)url,							//targetname is the name of the server
 		flags,							//bit flags that state how the security context will function
 		0,								//this argument is reserved and left as 0
 		SECURITY_NATIVE_DREP,			//how the data is represented. In schannel this argument is not used and set to 0
@@ -215,11 +215,114 @@ void TLS::handshake_loop()
 
 	if (secStatus == SEC_E_OK)
 		cout << "Secure connection successfully established!" << endl << endl;
+
+	cout << "/*********************************************************************************" << endl << endl;
+}
+void TLS::encrypt_send()
+{
+	BYTE *buff = NULL;		//BYTE can access raw memory
+	int bufflen = 0;
+	char* data;
+	SECURITY_STATUS stat;
+	SecBufferDesc msg;
+	SecBuffer buffers[4];
+	SecPkgContext_StreamSizes sizes;
+	
+	stat = QueryContextAttributes(&phContext, SECPKG_ATTR_STREAM_SIZES, &sizes);		//gets header,trailer etc sizes
+	if (stat != SEC_E_OK)
+		cout << "QueryContextAttributes failed with code: " << GetLastError() << endl << endl;
+	else
+		cout << "Sizes retrieved!" << endl << endl;
+
+	bufflen = sizes.cbMaximumMessage + sizes.cbTrailer + sizes.cbHeader;
+	buff = new BYTE[bufflen];													//creates memory space based on the sizes obtained above
+
+	memcpy(buff + sizes.cbHeader, (BYTE*)get_req.c_str(), get_req.length());	//copies the get request just after the header in the buffer
+
+	msg.cBuffers = 4;
+	msg.pBuffers = buffers;
+	msg.ulVersion = SECBUFFER_VERSION;
+
+	buffers[0].cbBuffer = sizes.cbHeader;
+	buffers[0].pvBuffer = buff;
+	buffers[0].BufferType = SECBUFFER_STREAM_HEADER;
+
+	buffers[1].cbBuffer = get_req.length();
+	buffers[1].pvBuffer = buff + sizes.cbHeader;
+	buffers[1].BufferType = SECBUFFER_DATA;
+
+	buffers[2].cbBuffer = sizes.cbTrailer;
+	buffers[2].pvBuffer = buff + sizes.cbHeader + get_req.length();
+	buffers[2].BufferType = SECBUFFER_STREAM_TRAILER;
+
+	buffers[3].cbBuffer = 0;
+	buffers[3].pvBuffer = NULL;
+	buffers[3].BufferType = SECBUFFER_EMPTY;
+
+	stat = EncryptMessage(&phContext, 0, &msg, 0);
+	if (stat != SEC_E_OK)
+		cout << "Failed to encrypt message: " << GetLastError() << endl << endl;
+	else
+		cout << "Message successfully encrypted!" << endl << endl;
+
+	bufflen = buffers[0].cbBuffer + buffers[1].cbBuffer + buffers[2].cbBuffer;
+	client.send_data((char*)buff, bufflen);
+	
+	free(buff);
+
+	cout << "/*********************************************************************************" << endl << endl;
+}
+void TLS::recv_decrypt()
+{
+	string html = "";
+	string holder = "";
+	char* buff = new char[20000];
+	SECURITY_STATUS stat;
+	SecBufferDesc msg;
+	SecBuffer buffer[4];
+
+	for (int i = 0; i < 3; i++)
+	{
+		rc = client.receive_data(buff, secStatus);
+
+		msg.cBuffers = 4;
+		msg.pBuffers = buffer;
+		msg.ulVersion = SECBUFFER_VERSION;
+
+		buffer[0].cbBuffer = rc;
+		buffer[0].pvBuffer = buff;
+		buffer[0].BufferType = SECBUFFER_DATA;
+
+		buffer[1].BufferType = SECBUFFER_EMPTY;
+		buffer[2].BufferType = SECBUFFER_EMPTY;
+		buffer[3].BufferType = SECBUFFER_EMPTY;
+
+		stat = DecryptMessage(&phContext, &msg, 0, NULL);
+		if (stat != SEC_E_OK)
+		{
+			if (stat == SEC_E_INCOMPLETE_MESSAGE)
+			{
+				cout << "Failed to decrypt data: " << "SEC_E_INCOMPLETE_MESSAGE" << endl << endl;
+			}
+			else
+				cout << "Failed to decrypt data: " << stat << endl << endl;
+
+		}
+		else
+			cout << "Data successfully decrypted!" << endl << endl;
+
+		cout << buff << endl;
+
+	}
+
+	cout << "/*********************************************************************************" << endl << endl;
+
+	// TO DO: handle messages that are too large
+	//		  implement loop to receive data
 }
 
-
-//			TODO:
-//					- add handling of extra data in inbuff
+//			TO DO in future:
+//							- add handling of extra data in inbuff
 
 
 

@@ -96,6 +96,7 @@ int Socket::receive_data(char* buff,SECURITY_STATUS secStatus)
 	else
 	{
 		// TO DO: setup receiving of application data
+		len = recv(client, buff, 20000, 0);
 	}
 
 	if (len == SOCKET_ERROR || len == 0)

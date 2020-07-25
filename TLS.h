@@ -26,14 +26,17 @@ private:
 	SECURITY_STATUS secStatus;
 
 	char* url;
+	string get_req;
 	Socket client{ url };
 
-	HMODULE dllModule{ NULL };
 	CredHandle cred;
+	CtxtHandle phContext;
 
 	void connect_to_server();
 	void get_schannel_creds();
 	void handshake_loop();
+	void encrypt_send();
+	void recv_decrypt();
 
 public:
 	TLS(char* url_);
