@@ -87,18 +87,18 @@ void Socket::send_data(char* buff, int size)
 
 	cout << "bytes sent: " << len << endl << endl;
 }
-int Socket::receive_data(char* buff,SECURITY_STATUS secStatus)
+int Socket::receive_data(char* buff, SECURITY_STATUS secStatus, int length)
 {
 	int len = 0;
+	int bytesToRecv = length;
+	char buffer[17000];
 
-	if (secStatus != SEC_E_OK)
-		len = recv(client, buff, 5000, 0);
+	if (length == 0)
+		len = recv(client, buff, 6000, 0);
 	else
 	{
-		// TO DO: setup receiving of application data
-		len = recv(client, buff, 20000, 0);
 	}
-
+	
 	if (len == SOCKET_ERROR || len == 0)
 	{
 		cout << "error receiving data: " << WSAGetLastError() << endl << endl;
@@ -114,3 +114,4 @@ SOCKET Socket::get_socket()
 {
 	return client;
 }
+

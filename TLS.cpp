@@ -147,14 +147,14 @@ void TLS::handshake_loop()
 	cout << "size of token: " << outBuff[0].cbBuffer << endl << endl;
 
 	char* token;
-	char buff[10000];
+	char* buff = new char[5000];
 
 	while (secStatus == SEC_I_CONTINUE_NEEDED)
 	{
 		token = static_cast<char*>(outBuff[0].pvBuffer);
 		client.send_data(token, outBuff[0].cbBuffer);
 		FreeContextBuffer(outBuff[0].pvBuffer);
-		rc = client.receive_data(buff,secStatus);
+		rc = client.receive_data(buff, secStatus);
 
 		inBuffDesc.cBuffers = 2;
 		inBuffDesc.pBuffers = inBuff;
@@ -215,6 +215,7 @@ void TLS::handshake_loop()
 
 	if (secStatus == SEC_E_OK)
 		cout << "Secure connection successfully established!" << endl << endl;
+	delete buff;
 
 	cout << "/*********************************************************************************" << endl << endl;
 }
@@ -226,8 +227,7 @@ void TLS::encrypt_send()
 	SECURITY_STATUS stat;
 	SecBufferDesc msg;
 	SecBuffer buffers[4];
-	SecPkgContext_StreamSizes sizes;
-	
+		
 	stat = QueryContextAttributes(&phContext, SECPKG_ATTR_STREAM_SIZES, &sizes);		//gets header,trailer etc sizes
 	if (stat != SEC_E_OK)
 		cout << "QueryContextAttributes failed with code: " << GetLastError() << endl << endl;
@@ -274,52 +274,139 @@ void TLS::encrypt_send()
 }
 void TLS::recv_decrypt()
 {
-	string html = "";
-	string holder = "";
-	char* buff = new char[20000];
+	pair<SECURITY_STATUS, string>errors[]{
+		{SEC_E_INVALID_TOKEN,"SEC_E_INVALID_TOKEN"},
+		{SEC_E_MESSAGE_ALTERED,"SEC_E_MESSAGE_ALTERED"},
+		{SEC_E_OUT_OF_SEQUENCE,"SEC_E_OUT_OF_SEQUENCE"},
+		{SEC_E_INVALID_HANDLE,"SEC_E_INVALID_HANDLE"},
+		{SEC_E_BUFFER_TOO_SMALL,"SEC_E_BUFFER_TOO_SMALL"},
+		{SEC_I_CONTEXT_EXPIRED,"SEC_I_CONTEXT_EXPIRED"},
+		{SEC_I_RENEGOTIATE,"SEC_I_RENEGOTIATE"},
+		{SEC_E_DECRYPT_FAILURE,"SEC_E_DECRYPT_FAILURE"}
+	};
+
+	int count = 0;
+	int contentLen = 0;
+	int bytesToDecrypt = 0;
+	char buff[1000];
+	char data[1000];
 	SECURITY_STATUS stat;
 	SecBufferDesc msg;
 	SecBuffer buffer[4];
+	SecBuffer extra;
 
-	for (int i = 0; i < 3; i++)
+	extra.BufferType = SECBUFFER_EMPTY;
+
+	ZeroMemory(data, sizeof(data));
+
+	do
 	{
-		rc = client.receive_data(buff, secStatus);
+		rc = recv(client.get_socket(), buff, 100, 0);
+		bytesToDecrypt += rc;
+		for (int i = 0; i < 1000; i++)
+		{
+			if (data[i] == NULL && data[i + 1] == NULL)
+			{
+				cout << "buff: " << endl << buff << endl << endl;
+				memcpy(data + i, buff, rc);
+				cout << "data: " << endl << data << endl << endl;
+				i = 1000;
+			}
+		}
 
 		msg.cBuffers = 4;
 		msg.pBuffers = buffer;
 		msg.ulVersion = SECBUFFER_VERSION;
 
-		buffer[0].cbBuffer = rc;
-		buffer[0].pvBuffer = buff;
+		buffer[0].cbBuffer = bytesToDecrypt;
+		buffer[0].pvBuffer = data;
 		buffer[0].BufferType = SECBUFFER_DATA;
 
 		buffer[1].BufferType = SECBUFFER_EMPTY;
 		buffer[2].BufferType = SECBUFFER_EMPTY;
 		buffer[3].BufferType = SECBUFFER_EMPTY;
 
+		extra.BufferType = SECBUFFER_EMPTY;
+
 		stat = DecryptMessage(&phContext, &msg, 0, NULL);
 		if (stat != SEC_E_OK)
 		{
 			if (stat == SEC_E_INCOMPLETE_MESSAGE)
 			{
-				cout << "Failed to decrypt data: " << "SEC_E_INCOMPLETE_MESSAGE" << endl << endl;
+				cout << "failed to decrypt message: SEC_E_INCOMPLETE_MESSAGE" << endl << endl;
 			}
 			else
-				cout << "Failed to decrypt data: " << stat << endl << endl;
+			{
+				cout << "failed to decrypt message: ";
 
+				for (int i = 0; i < 8; i++)
+				{
+					if (stat == errors[i].first)
+						cout << errors[i].second;
+				}
+
+				cout << ": " << stat << endl << endl;
+			}
 		}
 		else
-			cout << "Data successfully decrypted!" << endl << endl;
+		{
+			cout << "data successfully decrypted!" << endl << endl;
 
-		cout << buff << endl;
+			ZeroMemory(data, sizeof(data));
+			bytesToDecrypt = 0;
 
-	}
+			if (extra.BufferType == SECBUFFER_EMPTY)
+			{
+			}
+		}
+		count++;
+	} while (count < 10);//stat == SEC_E_INCOMPLETE_MESSAGE);
 
-	cout << "/*********************************************************************************" << endl << endl;
-
-	// TO DO: handle messages that are too large
-	//		  implement loop to receive data
+	cout << "bytes: " << bytesToDecrypt << endl << endl;
 }
+
+
+
+int TLS::get_content_length(char* buff, int len)
+{
+	cout << endl << endl << "clen: " << len << endl << endl;
+	string key = "Content-Length: ";
+	string length = "";
+	int index = 0;
+	int count = 0;
+	for (int i = 0; i < len; i++)
+	{
+		if (buff[i] == '\n')
+		{
+			cout << buff[i + 1] << endl << endl;
+			count = 0;
+			index = 0;
+			for (int e = i + 1; e < i + key.length() + 1; e++)
+			{
+				if (buff[e] == key[index])
+				{
+					cout << buff[e];
+					count += 1;
+				}
+				index += 1;
+			}
+			if (count == key.length())
+			{
+				count = i + key.length() + 1;
+				while (buff[count] != '\n')
+				{
+					length += buff[count];
+					count++;
+				}
+				i = len;
+			}
+		}
+	}
+	cout << endl << length << endl << endl;
+	return stoi(length);
+}
+
+
 
 //			TO DO in future:
 //							- add handling of extra data in inbuff
