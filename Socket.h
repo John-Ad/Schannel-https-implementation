@@ -26,7 +26,7 @@ public:
 	void create_socket();
 	void connect_to_server();
 	void send_data(char* buff, int size);
-	int receive_data(char* buff, SECURITY_STATUS secStatus, int length = 0);
+	int receive_data(char* buff, int length = 0);
 	SOCKET get_socket();
 	static void cncat(char dest[], char src[], int src_s, int dest_s, int len);
 };
