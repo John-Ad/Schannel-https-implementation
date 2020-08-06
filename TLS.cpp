@@ -286,7 +286,8 @@ void TLS::recv_decrypt()
 	};
 
 	string html = "";
-	int count = 0;
+	int totalBytes = 0;
+	int header = 0;
 	int contentLen = 0;
 	int bytesToDecrypt = 0;
 	char buff[2000];
@@ -301,6 +302,7 @@ void TLS::recv_decrypt()
 
 	do
 	{
+		ZeroMemory(buff, sizeof(buff));
 		rc = recv(client.get_socket(), buff, 400, 0);
 		cout << "bytes received: " << rc << endl << endl;
 		bytesToDecrypt += rc;
@@ -328,6 +330,9 @@ void TLS::recv_decrypt()
 		buffer[3].BufferType = SECBUFFER_EMPTY;
 
 		stat = DecryptMessage(&phContext, &msg, 0, NULL);
+
+		extra = false;
+
 		if (stat != SEC_E_OK)
 		{
 			if (stat == SEC_E_INCOMPLETE_MESSAGE)
@@ -345,6 +350,11 @@ void TLS::recv_decrypt()
 				}
 
 				cout << ": " << stat << endl << endl;
+
+				if (stat == SEC_E_DECRYPT_FAILURE)
+				{
+					done = true;
+				}
 			}
 		}
 		else
@@ -352,10 +362,8 @@ void TLS::recv_decrypt()
 			cout << "data successfully decrypted!" << endl << endl;
 
 			if (contentLen == 0)
-			{
 				contentLen = get_content_length(data, bytesToDecrypt);
-			}
-
+			
 			for (int i = 0; i < 4; i++)
 			{
 				if (buffer[i].BufferType == SECBUFFER_DATA)
@@ -366,6 +374,9 @@ void TLS::recv_decrypt()
 				if (buffer[i].BufferType == SECBUFFER_EXTRA)
 				{
 					cout << "Extra data in buffer " << i << endl << "size: " << buffer[i].cbBuffer << endl << endl;
+
+					if (header == 0)
+						header = bytesToDecrypt - buffer[i].cbBuffer;
 
 					ZeroMemory(buff, sizeof(buff));
 					memcpy(buff, data + (bytesToDecrypt - buffer[i].cbBuffer), buffer[i].cbBuffer);
@@ -378,6 +389,9 @@ void TLS::recv_decrypt()
 					extra = true;
 				}
 			}
+			
+			if (header == 0)
+				header = bytesToDecrypt;
 
 			if (extra == false)
 			{
@@ -385,15 +399,15 @@ void TLS::recv_decrypt()
 				bytesToDecrypt = 0;
 			}
 		}
-		count += rc;
+		totalBytes += rc;
 
-		if (contentLen > 0 && count >= contentLen)
+		if (contentLen > 0 && totalBytes >= contentLen + header)
 		{
 			done = true;
 		}
-	} while (!done);//stat == SEC_E_INCOMPLETE_MESSAGE);
+	} while (!done||extra);//stat == SEC_E_INCOMPLETE_MESSAGE);
 
-	cout << "bytes: " << count << endl << endl;
+	cout << "bytes: " << totalBytes << endl << endl;
 }
 
 /*
