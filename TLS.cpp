@@ -1,7 +1,7 @@
 #include "TLS.h"
 
 TLS::TLS(char* url_)
-	:url{ url_ }
+	:url{ url_ }, html{ "" }
 {
 	get_req = "GET / HTTP/1.1\r\nHost: ";
 	get_req += url;
@@ -14,6 +14,8 @@ TLS::TLS(char* url_)
 }
 TLS::~TLS()
 {
+	DeleteSecurityContext(&phContext);
+	FreeCredentialsHandle(&cred);
 }
 
 //___________________________________________________________________
@@ -147,14 +149,14 @@ void TLS::handshake_loop()
 	cout << "size of token: " << outBuff[0].cbBuffer << endl << endl;
 
 	char* token;
-	char* buff = new char[5000];
+	char* buff = new char[8000];
 
 	while (secStatus == SEC_I_CONTINUE_NEEDED)
 	{
 		token = static_cast<char*>(outBuff[0].pvBuffer);
 		client.send_data(token, outBuff[0].cbBuffer);
 		FreeContextBuffer(outBuff[0].pvBuffer);
-		rc = client.receive_data(buff, secStatus);
+		rc = client.receive_data(buff);
 
 		inBuffDesc.cBuffers = 2;
 		inBuffDesc.pBuffers = inBuff;
@@ -214,7 +216,16 @@ void TLS::handshake_loop()
 	}
 
 	if (secStatus == SEC_E_OK)
+	{
 		cout << "Secure connection successfully established!" << endl << endl;
+		for (int i = 0; i < 2; i++)
+		{
+			if (inBuff[i].BufferType == SECBUFFER_EXTRA)
+			{
+				cout << "Application data has been sent!" << endl << endl;
+			}
+		}
+	}
 	delete buff;
 
 	cout << "/*********************************************************************************" << endl << endl;
@@ -285,34 +296,25 @@ void TLS::recv_decrypt()
 		{SEC_E_DECRYPT_FAILURE,"SEC_E_DECRYPT_FAILURE"}
 	};
 
-	int count = 0;
+	int totalBytes = 0;
+	int header = 0;
 	int contentLen = 0;
 	int bytesToDecrypt = 0;
-	char buff[1000];
-	char data[1000];
+	char buff[2000];
+	char data[92000];
+	bool extra = false;
+	bool done = false;
 	SECURITY_STATUS stat;
 	SecBufferDesc msg;
 	SecBuffer buffer[4];
-	SecBuffer extra;
-
-	extra.BufferType = SECBUFFER_EMPTY;
 
 	ZeroMemory(data, sizeof(data));
 
 	do
 	{
-		rc = recv(client.get_socket(), buff, 100, 0);
+		rc = client.receive_data(data, 1000);
+		cout << "bytes received: " << rc << endl << endl;
 		bytesToDecrypt += rc;
-		for (int i = 0; i < 1000; i++)
-		{
-			if (data[i] == NULL && data[i + 1] == NULL)
-			{
-				cout << "buff: " << endl << buff << endl << endl;
-				memcpy(data + i, buff, rc);
-				cout << "data: " << endl << data << endl << endl;
-				i = 1000;
-			}
-		}
 
 		msg.cBuffers = 4;
 		msg.pBuffers = buffer;
@@ -326,9 +328,10 @@ void TLS::recv_decrypt()
 		buffer[2].BufferType = SECBUFFER_EMPTY;
 		buffer[3].BufferType = SECBUFFER_EMPTY;
 
-		extra.BufferType = SECBUFFER_EMPTY;
-
 		stat = DecryptMessage(&phContext, &msg, 0, NULL);
+
+		extra = false;
+
 		if (stat != SEC_E_OK)
 		{
 			if (stat == SEC_E_INCOMPLETE_MESSAGE)
@@ -346,27 +349,70 @@ void TLS::recv_decrypt()
 				}
 
 				cout << ": " << stat << endl << endl;
+
+				if (stat == SEC_E_DECRYPT_FAILURE)
+				{
+					cout << data << endl << endl;
+					done = true;
+				}
 			}
 		}
 		else
 		{
 			cout << "data successfully decrypted!" << endl << endl;
 
-			ZeroMemory(data, sizeof(data));
-			bytesToDecrypt = 0;
-
-			if (extra.BufferType == SECBUFFER_EMPTY)
+			if (contentLen == 0)
 			{
+				contentLen = get_content_length(data, bytesToDecrypt);
+				if (contentLen == 0)
+					contentLen = 90000;
 			}
+			
+			for (int i = 0; i < 4; i++)
+			{
+				if (buffer[i].BufferType == SECBUFFER_DATA)
+				{
+					html += (char*)buffer[i].pvBuffer;
+					cout << html << endl << endl;
+				}
+				if (buffer[i].BufferType == SECBUFFER_EXTRA)
+				{
+					cout << "Extra data in buffer " << i << endl << "size: " << buffer[i].cbBuffer << endl << endl;
+
+					if (header == 0)
+						header = bytesToDecrypt - buffer[i].cbBuffer;
+
+					ZeroMemory(buff, sizeof(buff));
+					memcpy(buff, data + (bytesToDecrypt - buffer[i].cbBuffer), buffer[i].cbBuffer);
+					cout << "buff: " << buff << endl << endl;
+					ZeroMemory(data, sizeof(data));
+					memcpy(data, buff, buffer[i].cbBuffer);
+					cout << "data: " << data << endl << endl;
+					bytesToDecrypt = buffer[i].cbBuffer;
+
+					extra = true;
+				}
+			}
+			
+			if (header == 0)
+				header = bytesToDecrypt;
+
+			if (extra == false)
+			{
+				ZeroMemory(data, sizeof(data));
+				bytesToDecrypt = 0;
+			}
+
 		}
-		count++;
-	} while (count < 10);//stat == SEC_E_INCOMPLETE_MESSAGE);
+		totalBytes += rc;
+		
+		if (contentLen > 0 && totalBytes >= contentLen + header)
+			done = true;
+		
+	} while (!done||extra);
 
-	cout << "bytes: " << bytesToDecrypt << endl << endl;
+	cout << "bytes: " << totalBytes << endl << endl;
 }
-
-
-
 int TLS::get_content_length(char* buff, int len)
 {
 	cout << endl << endl << "clen: " << len << endl << endl;
@@ -403,13 +449,11 @@ int TLS::get_content_length(char* buff, int len)
 		}
 	}
 	cout << endl << length << endl << endl;
-	return stoi(length);
+	if (length[0] != NULL)
+		return stoi(length);
+	else
+		return 0;
 }
-
-
-
-//			TO DO in future:
-//							- add handling of extra data in inbuff
 
 
 

@@ -26,6 +26,7 @@ private:
 	SECURITY_STATUS secStatus;
 
 	char* url;
+	string html;
 	string get_req;
 	Socket client{ url };
 

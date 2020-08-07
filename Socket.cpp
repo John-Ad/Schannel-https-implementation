@@ -87,16 +87,44 @@ void Socket::send_data(char* buff, int size)
 
 	cout << "bytes sent: " << len << endl << endl;
 }
-int Socket::receive_data(char* buff, SECURITY_STATUS secStatus, int length)
+int Socket::receive_data(char* buff, int length)
 {
 	int len = 0;
 	int bytesToRecv = length;
-	char buffer[17000];
+	char buffer[17003];
+
+	ZeroMemory(buffer, sizeof(buffer));
 
 	if (length == 0)
 		len = recv(client, buff, 6000, 0);
 	else
 	{
+		do
+		{
+			rc = recv(client, buffer, bytesToRecv, 0);
+
+			cout << "buffer: " << endl << buff << endl << endl;
+
+			for (int i = 0; i < 92000; i++)
+			{
+				if (buff[i] == NULL && buff[i + 1] == NULL && buff[i + 2] == NULL)
+				{
+					for (int e = 0; e < 17000; e++)
+					{
+						if (buffer[e] == NULL && buffer[e + 1] == NULL && buffer[e + 2] == NULL)
+						{
+							memcpy(buff + i, buffer, e);
+						}
+					}
+					cout << "data: " << endl << buff << endl << endl;
+					i = 92000;
+				}
+			}
+
+			bytesToRecv -= rc;
+			len += rc;
+
+		} while (bytesToRecv > 0 && rc != 0);
 	}
 	
 	if (len == SOCKET_ERROR || len == 0)
