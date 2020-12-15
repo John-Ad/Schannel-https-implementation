@@ -3,8 +3,12 @@
 TLS::TLS(char* url_)
 	:url{ url_ }, html{ "" }
 {
-	get_req = "GET / HTTP/1.1\r\nHost: ";
+	//get_req = "GET /user/2403710?key=0WuaMGTBCwSCuJwE HTTP/1.1\r\nHost: ";
+	//get_req = "GET /market/?key=0WuaMGTBCwSCuJwE HTTP/1.1\r\nHost: ";
+	//get_req = "GET /faction/?selections=basic&key=0WuaMGTBCwSCuJwE HTTP/1.1\r\nHost: ";
+	get_req = "GET /user/?selections=inventory&key=0WuaMGTBCwSCuJwE HTTP/1.1\r\nHost: ";
 	get_req += url;
+	//get_req += "\r\nAccept-Encoding: identity\r\nConnection: close\r\n\r\n";
 	get_req += "\r\nConnection: close\r\n\r\n";
 	connect_to_server();
 	get_schannel_creds();
@@ -41,7 +45,8 @@ void TLS::get_schannel_creds()
 
 	ZeroMemory(&credData, sizeof(credData));					//clear SCHANNEL_CRED memory or error: SEC_E_INSUFFICIENT_MEMORY occurs
 	credData.dwVersion = SCHANNEL_CRED_VERSION;
-	credData.grbitEnabledProtocols = SP_PROT_TLS1_2_CLIENT;
+	//credData.grbitEnabledProtocols = SP_PROT_TLS1_2_CLIENT;
+	credData.grbitEnabledProtocols = SP_PROT_TLS1;
 
 	secStatus = AcquireCredentialsHandle(		//gets the credentials necessary to make use of the ssp
 			NULL,						//default principle
@@ -104,6 +109,10 @@ void TLS::handshake_loop()
 	ULONG ContextAttributes;
 	DWORD flags;
 
+
+	char* token;
+	char* buff = new char[8000];
+
 	outBuffDesc.ulVersion = SECBUFFER_VERSION;
 	outBuffDesc.cBuffers = 1;
 	outBuffDesc.pBuffers = outBuff;
@@ -148,50 +157,72 @@ void TLS::handshake_loop()
 	}
 	cout << "size of token: " << outBuff[0].cbBuffer << endl << endl;
 
-	char* token;
-	char* buff = new char[8000];
-
-	while (secStatus == SEC_I_CONTINUE_NEEDED)
+	bool moreData = false;
+	int missingData = 0;
+	secStatus = SEC_I_CONTINUE_NEEDED;
+	while (secStatus != SEC_E_OK)
 	{
-		token = static_cast<char*>(outBuff[0].pvBuffer);
-		client.send_data(token, outBuff[0].cbBuffer);
-		FreeContextBuffer(outBuff[0].pvBuffer);
-		rc = client.receive_data(buff);
+		if (secStatus == SEC_I_CONTINUE_NEEDED && !moreData)
+		{
+			if (outBuff[0].cbBuffer > 0)
+			{
+				token = static_cast<char*>(outBuff[0].pvBuffer);
+				client.send_data(token, outBuff[0].cbBuffer);
+				FreeContextBuffer(outBuff[0].pvBuffer);
+			}
+			rc = client.receive_data(buff);
+		}
+		else if (secStatus == SEC_E_INCOMPLETE_MESSAGE)
+		{
+			if (inBuff[1].BufferType == SECBUFFER_MISSING)
+			{
+				missingData = inBuff[1].cbBuffer;
+				cout << "missing data: " << missingData << endl << endl;
+				rc += client.receive_data(buff, missingData);
+				moreData = false;
+			}
+			else
+				break;
+		}
 
-		inBuffDesc.cBuffers = 2;
-		inBuffDesc.pBuffers = inBuff;
-		inBuffDesc.ulVersion = SECBUFFER_VERSION;
+		if (secStatus == SEC_I_CONTINUE_NEEDED || secStatus == SEC_E_INCOMPLETE_MESSAGE)
+		{
+			cout << "initContext" << endl << endl;
+			inBuffDesc.cBuffers = 2;
+			inBuffDesc.pBuffers = inBuff;
+			inBuffDesc.ulVersion = SECBUFFER_VERSION;
 
-		inBuff[0].cbBuffer = rc;
-		inBuff[0].pvBuffer = buff;
-		inBuff[0].BufferType = SECBUFFER_TOKEN;
+			inBuff[0].cbBuffer = rc;
+			inBuff[0].pvBuffer = buff;
+			inBuff[0].BufferType = SECBUFFER_TOKEN;
 
-		inBuff[1].cbBuffer = 0;
-		inBuff[1].pvBuffer = NULL;
-		inBuff[1].BufferType = SECBUFFER_EMPTY;
+			inBuff[1].cbBuffer = 0;
+			inBuff[1].pvBuffer = NULL;
+			inBuff[1].BufferType = SECBUFFER_EMPTY;
 
-		outBuffDesc.cBuffers = 1;
-		outBuffDesc.pBuffers = outBuff;
-		outBuffDesc.ulVersion = SECBUFFER_VERSION;
+			outBuffDesc.cBuffers = 1;
+			outBuffDesc.pBuffers = outBuff;
+			outBuffDesc.ulVersion = SECBUFFER_VERSION;
 
-		outBuff[0].cbBuffer = 0;
-		outBuff[0].pvBuffer = NULL;
-		outBuff[0].BufferType = SECBUFFER_VERSION;
+			outBuff[0].cbBuffer = 0;
+			outBuff[0].pvBuffer = NULL;
+			outBuff[0].BufferType = SECBUFFER_VERSION;
 
-		secStatus = InitializeSecurityContext(
-			&cred,
-			&phContext,
-			(SEC_CHAR*)url,
-			flags,
-			0,
-			SECURITY_NATIVE_DREP,
-			&inBuffDesc,
-			0,
-			NULL,
-			&outBuffDesc,
-			&ContextAttributes,
-			&lifeTime
-		);
+			secStatus = InitializeSecurityContext(
+				&cred,
+				&phContext,
+				(SEC_CHAR*)url,
+				flags,
+				0,
+				SECURITY_NATIVE_DREP,
+				&inBuffDesc,
+				0,
+				NULL,
+				&outBuffDesc,
+				&ContextAttributes,
+				&lifeTime
+			);
+		}
 
 		for (int i = 0; i < 10; i++)
 		{
@@ -209,15 +240,36 @@ void TLS::handshake_loop()
 				i = 10;
 			}
 		}
+		if(secStatus==SEC_E_INVALID_TOKEN)
+		{ 
+			cout << &outBuff[1].pvBuffer << endl << endl;
+		}
 		cout << "size of token: " << outBuff[0].cbBuffer << endl << endl;
 
 		if (inBuff[1].BufferType == SECBUFFER_EXTRA)
+		{
 			cout << "extra data in inbuff" << endl << endl;
+			
+			char* holder = new char[8000];
+			copy(buff + (rc - inBuff[1].cbBuffer), buff + (8000-inBuff[1].cbBuffer), holder);
+			fill(buff, buff + 8000, 0);
+			copy(holder, holder + inBuff[1].cbBuffer, buff);
+			rc = inBuff[1].cbBuffer;
+			moreData = true;
+			delete holder;
+		}
 	}
 
 	if (secStatus == SEC_E_OK)
 	{
 		cout << "Secure connection successfully established!" << endl << endl;
+		if (outBuff[0].cbBuffer > 0)
+		{
+			token = static_cast<char*>(outBuff[0].pvBuffer);
+			client.send_data(token, outBuff[0].cbBuffer);
+			FreeContextBuffer(outBuff[0].pvBuffer);
+			rc = client.receive_data(buff);
+		}
 		for (int i = 0; i < 2; i++)
 		{
 			if (inBuff[i].BufferType == SECBUFFER_EXTRA)
@@ -241,7 +293,13 @@ void TLS::encrypt_send()
 		
 	stat = QueryContextAttributes(&phContext, SECPKG_ATTR_STREAM_SIZES, &sizes);		//gets header,trailer etc sizes
 	if (stat != SEC_E_OK)
-		cout << "QueryContextAttributes failed with code: " << GetLastError() << endl << endl;
+	{
+		if (stat == SEC_E_INVALID_HANDLE)
+		{
+			cout << "QueryContextAttributes failed with code: " << stat << endl << endl;
+		}
+		return;
+	}
 	else
 		cout << "Sizes retrieved!" << endl << endl;
 
@@ -300,19 +358,20 @@ void TLS::recv_decrypt()
 	int header = 0;
 	int contentLen = 0;
 	int bytesToDecrypt = 0;
-	char buff[6000];
-	char data[92000];
+	char* buff=new char[10000];
+	char data[10000];
 	bool extra = false;
 	bool done = false;
 	SECURITY_STATUS stat;
 	SecBufferDesc msg;
 	SecBuffer buffer[4];
 
-	ZeroMemory(data, sizeof(data));
+	fill(data, data + 10000, 0);
+	//ZeroMemory(data, sizeof(data));
 
 	do
 	{
-		rc = client.receive_data(data, 4000);
+		rc = client.receive_data(data, 2000);
 		//cout << "bytes received: " << rc << endl << endl;
 		bytesToDecrypt += rc;
 
@@ -352,8 +411,15 @@ void TLS::recv_decrypt()
 
 				if (stat == SEC_E_DECRYPT_FAILURE)
 				{
-					//cout << data << endl << endl;
+				//	cout << data << endl << endl;
 					done = true;
+					for (int i = 0; i < 4; i++)
+					{
+						if (buffer[i].BufferType == SECBUFFER_ALERT)
+						{
+							cout << "Alert : " << buffer[i].pvBuffer << endl << endl;
+						}
+					}
 				}
 			}
 		}
@@ -365,7 +431,7 @@ void TLS::recv_decrypt()
 			{
 				contentLen = get_content_length(data, bytesToDecrypt);
 				if (contentLen == 0)
-					contentLen = 90000;
+					contentLen = 10000;
 			}
 			
 			for (int i = 0; i < 4; i++)
@@ -382,11 +448,15 @@ void TLS::recv_decrypt()
 					if (header == 0)
 						header = bytesToDecrypt - buffer[i].cbBuffer;
 
-					ZeroMemory(buff, sizeof(buff));
-					memcpy(buff, data + (bytesToDecrypt - buffer[i].cbBuffer), buffer[i].cbBuffer);
+					//ZeroMemory(buff, sizeof(buff));
+					fill(buff, buff + 10000, 0);
+					copy(data + (bytesToDecrypt - buffer[i].cbBuffer),data+(10000-buffer[i].cbBuffer), buff);
+					//memcpy(buff, data + (bytesToDecrypt - buffer[i].cbBuffer), buffer[i].cbBuffer);
 					//cout << "buff: " << buff << endl << endl;
-					ZeroMemory(data, sizeof(data));
-					memcpy(data, buff, buffer[i].cbBuffer);
+					fill(data, data + 10000, 0);
+					copy(buff, buff + buffer[i].cbBuffer, data);
+					//ZeroMemory(data, sizeof(data));
+					//memcpy(data, buff, buffer[i].cbBuffer);
 					//cout << "data: " << data << endl << endl;
 					bytesToDecrypt = buffer[i].cbBuffer;
 
@@ -399,7 +469,8 @@ void TLS::recv_decrypt()
 
 			if (extra == false)
 			{
-				ZeroMemory(data, sizeof(data));
+				fill(data, data + 10000, 0);
+				//ZeroMemory(data, sizeof(data));
 				bytesToDecrypt = 0;
 			}
 
@@ -408,10 +479,12 @@ void TLS::recv_decrypt()
 		
 		if (contentLen > 0 && totalBytes >= contentLen + header)
 			done = true;
+		if (rc == 0)
+			done = true;
 		
 	} while (!done||extra);
 
-	cout << "bytes: " << totalBytes << endl << endl << html << endl << endl;
+	cout << html << endl << endl << "bytes: " << totalBytes << endl << endl;
 }
 int TLS::get_content_length(char* buff, int len)
 {

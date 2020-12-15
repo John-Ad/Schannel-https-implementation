@@ -2,6 +2,6 @@
 
 int main()
 {
-	TLS client((char*)"www.wikipedia.org");
+	TLS client((char*)"api.torn.com");
 	return 0;
 }

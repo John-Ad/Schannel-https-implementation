@@ -91,6 +91,7 @@ int Socket::receive_data(char* buff, int length)
 {
 	int len = 0;
 	int bytesToRecv = length;
+	char buffer[10000];
 
 	if (length == 0)
 		len = recv(client, buff, 6000, 0);
@@ -98,16 +99,20 @@ int Socket::receive_data(char* buff, int length)
 	{
 		do
 		{
-			cout << "buffer: " << endl << buff << endl << endl;
+			//cout << "buffer: " << endl << buff << endl << endl;
 
-			for (int i = 0; i < 92000; i++)
+			for (int i = 0; i < 10000; i++)
 			{
-				if (buff[i] == NULL && buff[i + 1] == NULL && buff[i + 2] == NULL)
+				if (buff[i] == NULL&&buff[i+1]==NULL)
 				{
 					rc = recv(client, &buff[i], bytesToRecv, 0);
+					/*fill(buffer, buffer + 10000, 0);
+					rc = recv(client, buffer, bytesToRecv, 0);
+					copy(buffer, buffer + rc, buff + i);*/
+					//delete above this line---------------
 					
-					cout << "data: " << endl << buff << endl << endl;
-					i = 92000;
+					//cout << "data: " << endl << buff << endl << "buffer: " << buffer << endl << endl;
+					i = 10000;
 				}
 			}
 
