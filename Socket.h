@@ -1,14 +1,4 @@
-#pragma once
-#pragma comment(lib,"Ws2_32.lib")
-
-#include <WS2tcpip.h>
-#include <Windows.h>
-#include <string>
-#include <iostream>
-
-#define SCK_VERSION 0x0202
-
-using namespace std;
+#include "SocketIncludes.h"
 
 class Socket
 {

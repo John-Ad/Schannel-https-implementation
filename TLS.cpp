@@ -14,7 +14,7 @@ TLS::TLS(char* url_)
 	get_schannel_creds();
 	handshake_loop();
 	encrypt_send();
-	recv_decrypt();
+	//recv_decrypt();
 }
 TLS::~TLS()
 {
@@ -28,7 +28,7 @@ void TLS::connect_to_server()
 	client.set_server_details();
 	client.create_socket();
 	client.connect_to_server();
-	cout << "/*********************************************************************************" << endl << endl;
+	//cout << "/*********************************************************************************" << endl << endl;
 }
 void TLS::get_schannel_creds()
 {
@@ -66,7 +66,7 @@ void TLS::get_schannel_creds()
 		{
 			if (secStatus == error[i].first)
 			{
-				cout << "Credentials could not be acquired. Error code: " << error[i].second << "   " << endl << endl;
+				//cout << "Credentials could not be acquired. Error code: " << error[i].second << "   " << endl << endl;
 				i = 6;
 			}
 		}
@@ -74,9 +74,9 @@ void TLS::get_schannel_creds()
 	}
 	else
 	{
-		cout << "Credentials acquired successfully!" << endl << endl;
+		//cout << "Credentials acquired successfully!" << endl << endl;
 	}
-	cout << "/*********************************************************************************" << endl << endl;
+	//cout << "/*********************************************************************************" << endl << endl;
 }
 void TLS::handshake_loop()
 {
@@ -110,7 +110,7 @@ void TLS::handshake_loop()
 	DWORD flags;
 
 
-	char* token;
+	char* token = NULL;
 	char* buff = new char[8000];
 
 	outBuffDesc.ulVersion = SECBUFFER_VERSION;
@@ -145,17 +145,17 @@ void TLS::handshake_loop()
 		{
 			if (secStatus == success[i].first)
 			{
-				cout << "InitializeSecurityContext succeeded with code: " << success[i].second << endl << endl;
+				//cout << "InitializeSecurityContext succeeded with code: " << success[i].second << endl << endl;
 				i = 10;
 			}
 		}
 		if (secStatus == error[i].first)
 		{
-			cout << "InitializeSecurityContext failed with error: " << error[i].second << endl << endl;
+			//cout << "InitializeSecurityContext failed with error: " << error[i].second << endl << endl;
 			i = 10;
 		}
 	}
-	cout << "size of token: " << outBuff[0].cbBuffer << endl << endl;
+	//cout << "size of token: " << outBuff[0].cbBuffer << endl << endl;
 
 	bool moreData = false;
 	int missingData = 0;
@@ -177,7 +177,7 @@ void TLS::handshake_loop()
 			if (inBuff[1].BufferType == SECBUFFER_MISSING)
 			{
 				missingData = inBuff[1].cbBuffer;
-				cout << "missing data: " << missingData << endl << endl;
+				//cout << "missing data: " << missingData << endl << endl;
 				rc += client.receive_data(buff, missingData);
 				moreData = false;
 			}
@@ -187,7 +187,7 @@ void TLS::handshake_loop()
 
 		if (secStatus == SEC_I_CONTINUE_NEEDED || secStatus == SEC_E_INCOMPLETE_MESSAGE)
 		{
-			cout << "initContext" << endl << endl;
+			//cout << "initContext" << endl << endl;
 			inBuffDesc.cBuffers = 2;
 			inBuffDesc.pBuffers = inBuff;
 			inBuffDesc.ulVersion = SECBUFFER_VERSION;
@@ -230,25 +230,25 @@ void TLS::handshake_loop()
 			{
 				if (secStatus == success[i].first)
 				{
-					cout << "InitializeSecurityContext succeeded with code: " << success[i].second << endl << endl;
+					//cout << "InitializeSecurityContext succeeded with code: " << success[i].second << endl << endl;
 					i = 10;
 				}
 			}
 			if (secStatus == error[i].first)
 			{
-				cout << "InitializeSecurityContext failed with error: " << error[i].second << endl << endl;
+				//cout << "InitializeSecurityContext failed with error: " << error[i].second << endl << endl;
 				i = 10;
 			}
 		}
 		if(secStatus==SEC_E_INVALID_TOKEN)
 		{ 
-			cout << &outBuff[1].pvBuffer << endl << endl;
+			//cout << &outBuff[1].pvBuffer << endl << endl;
 		}
-		cout << "size of token: " << outBuff[0].cbBuffer << endl << endl;
+		//cout << "size of token: " << outBuff[0].cbBuffer << endl << endl;
 
 		if (inBuff[1].BufferType == SECBUFFER_EXTRA)
 		{
-			cout << "extra data in inbuff" << endl << endl;
+			//cout << "extra data in inbuff" << endl << endl;
 			
 			char* holder = new char[8000];
 			copy(buff + (rc - inBuff[1].cbBuffer), buff + (8000-inBuff[1].cbBuffer), holder);
@@ -262,7 +262,7 @@ void TLS::handshake_loop()
 
 	if (secStatus == SEC_E_OK)
 	{
-		cout << "Secure connection successfully established!" << endl << endl;
+		//cout << "Secure connection successfully established!" << endl << endl;
 		if (outBuff[0].cbBuffer > 0)
 		{
 			token = static_cast<char*>(outBuff[0].pvBuffer);
@@ -274,19 +274,22 @@ void TLS::handshake_loop()
 		{
 			if (inBuff[i].BufferType == SECBUFFER_EXTRA)
 			{
-				cout << "Application data has been sent!" << endl << endl;
+				//cout << "Application data has been sent!" << endl << endl;
 			}
 		}
 	}
-	delete buff;
 
-	cout << "/*********************************************************************************" << endl << endl;
+	token = NULL;
+	delete[] token;
+	delete[] buff;
+
+	//cout << "/*********************************************************************************" << endl << endl;
 }
 void TLS::encrypt_send()
 {
 	BYTE *buff = NULL;		//BYTE can access raw memory
 	int bufflen = 0;
-	char* data;
+	//char* data;
 	SECURITY_STATUS stat;
 	SecBufferDesc msg;
 	SecBuffer buffers[4];
@@ -296,12 +299,12 @@ void TLS::encrypt_send()
 	{
 		if (stat == SEC_E_INVALID_HANDLE)
 		{
-			cout << "QueryContextAttributes failed with code: " << stat << endl << endl;
+			//cout << "QueryContextAttributes failed with code: " << stat << endl << endl;
 		}
 		return;
 	}
-	else
-		cout << "Sizes retrieved!" << endl << endl;
+	//else
+		//cout << "Sizes retrieved!" << endl << endl;
 
 	bufflen = sizes.cbMaximumMessage + sizes.cbTrailer + sizes.cbHeader;
 	buff = new BYTE[bufflen];													//creates memory space based on the sizes obtained above
@@ -329,19 +332,20 @@ void TLS::encrypt_send()
 	buffers[3].BufferType = SECBUFFER_EMPTY;
 
 	stat = EncryptMessage(&phContext, 0, &msg, 0);
-	if (stat != SEC_E_OK)
+	/*if (stat != SEC_E_OK)
 		cout << "Failed to encrypt message: " << GetLastError() << endl << endl;
 	else
 		cout << "Message successfully encrypted!" << endl << endl;
+		*/
 
 	bufflen = buffers[0].cbBuffer + buffers[1].cbBuffer + buffers[2].cbBuffer;
 	client.send_data((char*)buff, bufflen);
 	
 	free(buff);
 
-	cout << "/*********************************************************************************" << endl << endl;
+	//cout << "/*********************************************************************************" << endl << endl;
 }
-void TLS::recv_decrypt()
+string TLS::recv_decrypt()
 {
 	pair<SECURITY_STATUS, string>errors[]{
 		{SEC_E_INVALID_TOKEN,"SEC_E_INVALID_TOKEN"},
@@ -358,9 +362,13 @@ void TLS::recv_decrypt()
 	int header = 0;
 	int contentLen = 0;
 	int bytesToDecrypt = 0;
+	int bytesToRec = 2000;
+	int decryptSize = 0;
+	char* holder = new char[15000];
 	char* buff=new char[10000];
 	char data[10000];
 	bool extra = false;
+	bool dataRec = true;
 	bool done = false;
 	SECURITY_STATUS stat;
 	SecBufferDesc msg;
@@ -371,9 +379,15 @@ void TLS::recv_decrypt()
 
 	do
 	{
-		rc = client.receive_data(data, 2000);
-		//cout << "bytes received: " << rc << endl << endl;
-		bytesToDecrypt += rc;
+		dataRec = false;
+		//if (bytesToDecrypt < 1397)
+		if (bytesToDecrypt < decryptSize || decryptSize == 0)
+		{
+			rc = client.receive_data(data, bytesToRec);
+			//cout << "bytes received: " << rc << endl << endl;
+			bytesToDecrypt += rc;
+			dataRec = true;
+		}
 
 		msg.cBuffers = 4;
 		msg.pBuffers = buffer;
@@ -396,6 +410,7 @@ void TLS::recv_decrypt()
 			if (stat == SEC_E_INCOMPLETE_MESSAGE)
 			{
 				cout << "failed to decrypt message: SEC_E_INCOMPLETE_MESSAGE" << endl << endl;
+				cout << "bytes to dec: " << bytesToDecrypt << endl << "bytes to rec: " << bytesToRec << endl << endl;
 			}
 			else
 			{
@@ -407,7 +422,7 @@ void TLS::recv_decrypt()
 						cout << errors[i].second;
 				}
 
-				cout << ": " << stat << endl << endl;
+				//cout << ": " << stat << endl << endl;
 
 				if (stat == SEC_E_DECRYPT_FAILURE)
 				{
@@ -417,15 +432,19 @@ void TLS::recv_decrypt()
 					{
 						if (buffer[i].BufferType == SECBUFFER_ALERT)
 						{
-							cout << "Alert : " << buffer[i].pvBuffer << endl << endl;
+							//cout << "Alert : " << buffer[i].pvBuffer << endl << endl;
 						}
 					}
+					return "failed";
 				}
 			}
 		}
 		else
 		{
-			cout << "data successfully decrypted!" << endl << endl;
+			//cout << "data successfully decrypted!" << endl << endl;
+
+			bytesToRec = bytesToDecrypt;
+			cout << endl << endl << "bytesToRec 1: " << bytesToRec << endl << endl;
 
 			if (contentLen == 0)
 			{
@@ -438,15 +457,24 @@ void TLS::recv_decrypt()
 			{
 				if (buffer[i].BufferType == SECBUFFER_DATA)
 				{
-					html += (char*)buffer[i].pvBuffer;
+					fill(holder, holder + 15000, 0);
+					copy((char*)buffer[i].pvBuffer, (char*)buffer[i].pvBuffer + buffer[i].cbBuffer, holder);
+					html += holder;
+					//html += (char*)buffer[i].pvBuffer;
 					//cout << html << endl << endl;
 				}
 				if (buffer[i].BufferType == SECBUFFER_EXTRA)
 				{
-					cout << "Extra data in buffer " << i << endl << "size: " << buffer[i].cbBuffer << endl << endl;
+					//cout << "Extra data in buffer " << i << endl << "size: " << buffer[i].cbBuffer << endl << endl;
+					if (decryptSize == 0)
+					{
+						decryptSize = bytesToDecrypt - buffer[i].cbBuffer;
+					}
+					bytesToRec = decryptSize - buffer[i].cbBuffer;
+					cout << endl << endl << "bytesToRec 2: " << bytesToRec << endl << endl;
 
 					if (header == 0)
-						header = bytesToDecrypt - buffer[i].cbBuffer;
+						header = (bytesToDecrypt - buffer[i].cbBuffer);
 
 					//ZeroMemory(buff, sizeof(buff));
 					fill(buff, buff + 10000, 0);
@@ -475,7 +503,8 @@ void TLS::recv_decrypt()
 			}
 
 		}
-		totalBytes += rc;
+		if(dataRec)
+			totalBytes += rc;
 		
 		if (contentLen > 0 && totalBytes >= contentLen + header)
 			done = true;
@@ -484,7 +513,11 @@ void TLS::recv_decrypt()
 		
 	} while (!done||extra);
 
-	cout << html << endl << endl << "bytes: " << totalBytes << endl << endl;
+	//cout << html << endl << endl << "bytes: " << totalBytes << endl << endl;
+
+	delete holder;
+	delete buff;
+	return html.substr(html.length() - contentLen, html.length());
 }
 int TLS::get_content_length(char* buff, int len)
 {
@@ -521,7 +554,7 @@ int TLS::get_content_length(char* buff, int len)
 			}
 		}
 	}
-	cout << endl << length << endl << endl;
+	//cout << endl << length << endl << endl;
 	if (length[0] != NULL)
 		return stoi(length);
 	else

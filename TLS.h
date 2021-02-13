@@ -39,12 +39,12 @@ private:
 	void get_schannel_creds();
 	void handshake_loop();
 	void encrypt_send();
-	void recv_decrypt();
 
 	int get_content_length(char *buff, int len);
 
 public:
 	TLS(char* url_);
 	~TLS();
+	string recv_decrypt();
 };
 

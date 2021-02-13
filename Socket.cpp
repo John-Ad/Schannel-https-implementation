@@ -6,22 +6,24 @@ Socket::Socket(string url_)
 {
 	url = url_;
 	int error = WSAStartup(MAKEWORD(2, 2), &wdata);
+	/*
 	if (error != 0)
-		cout << "WSAStartup failed with error code: " << error << endl << endl;
+		//cout << "WSAStartup failed with error code: " << error << endl << endl;
 	else
-		cout << "WSAStartup successful!" << endl << endl;
+		//cout << "WSAStartup successful!" << endl << endl;
+		*/
 }
 Socket::~Socket()
 {
 	shutdown(client, 0);
 	closesocket(client);
 
+	/*
 	if (WSACleanup() == SOCKET_ERROR)
-		cout << "WSACleanup failed!" << endl << endl;
+		//cout << "WSACleanup failed!" << endl << endl;
 	else
 		cout << "WSACleanup successful!" << endl << endl;
-
-	cin.get();
+		*/
 }
 
 void Socket::set_server_details()
@@ -37,33 +39,35 @@ void Socket::set_server_details()
 															//arg 4 is where the results will be stored
 	if (rc != 0)
 	{
-		cout << "unable to resolve name. Error: " << WSAGetLastError() << endl << endl;
+		//cout << "unable to resolve name. Error: " << WSAGetLastError() << endl << endl;
 		return;
 	}
 	else
 	{
-		cout << "name resolved successfully!   " << result->ai_canonname << endl << endl;
+		//cout << "name resolved successfully!   " << result->ai_canonname << endl << endl;
 	}
 }
 void Socket::create_socket()
 {
 	client = socket(result->ai_family, result->ai_socktype, result->ai_protocol);
+	/*
 	if (client == INVALID_SOCKET)
 		cout << "failed to create socket!" << endl << endl;
 	else
 		cout << "socket created successully!" << endl << endl;
+		*/
 }
 void Socket::connect_to_server()
 {
 	rc = connect(client, result->ai_addr, result->ai_addrlen);
 	if (rc == SOCKET_ERROR)
 	{
-		cout << "failed to connect!" << endl << endl;
-		cout << "WSA error: " << WSAGetLastError() << endl << endl;
+		//cout << "failed to connect!" << endl << endl;
+		//cout << "WSA error: " << WSAGetLastError() << endl << endl;
 	}
 	else
 	{
-		cout << "successfully connected!" << endl << endl;
+		//cout << "successfully connected!" << endl << endl;
 	}
 }
 void Socket::send_data(char* buff, int size)
@@ -78,14 +82,14 @@ void Socket::send_data(char* buff, int size)
 
 		if (rc <= 0)
 		{
-			cout << "error sending data: " << WSAGetLastError() << endl << endl;
+			//cout << "error sending data: " << WSAGetLastError() << endl << endl;
 			return;
 		}
 
 		len += rc;
 	} while ( rc < size);
 
-	cout << "bytes sent: " << len << endl << endl;
+	//cout << "bytes sent: " << len << endl << endl;
 }
 int Socket::receive_data(char* buff, int length)
 {
@@ -124,12 +128,12 @@ int Socket::receive_data(char* buff, int length)
 	
 	if (len == SOCKET_ERROR || len == 0)
 	{
-		cout << "error receiving data: " << WSAGetLastError() << endl << endl;
+		//cout << "error receiving data: " << WSAGetLastError() << endl << endl;
 		return 0;
 	}
 	else
 	{
-		cout << "bytes received: " << len << endl << endl;
+		//cout << "bytes received: " << len << endl << endl;
 		return len;
 	}
 }
